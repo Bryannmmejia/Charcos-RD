@@ -8,6 +8,7 @@ export interface FloodReport {
   waterLevel: WaterLevel;
   recommendedVehicles: VehicleType[];
   photoUrl?: string;
+  comment?: string;
   createdAt: number;
   confirms: number;
   rejects: number;
