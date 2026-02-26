@@ -1,30 +1,36 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import * as Location from 'expo-location';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import { createReport } from '@/services/reportsService';
 import { vehicleLabels } from '@/constants/vehicles';
-import { VehicleType, WaterLevel } from '@/types/report';
 import { RootStackParamList } from '@/types/navigation';
+import { VehicleType, WaterLevel } from '@/types/report';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Report'>;
 
-const levels: { key: WaterLevel; label: string }[] = [
-  { key: 'green', label: '🟢 Verde' },
-  { key: 'yellow', label: '🟡 Amarillo' },
-  { key: 'red', label: '🔴 Rojo' }
+const levels: { key: WaterLevel; label: string; helper: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }[] = [
+  { key: 'green', label: '🟢 Verde', helper: 'Cruce seguro', icon: 'water-check' },
+  { key: 'yellow', label: '🟡 Amarillo', helper: 'Cruce con precaución', icon: 'water-alert' },
+  { key: 'red', label: '🔴 Rojo', helper: 'No cruzar', icon: 'water-remove' }
 ];
+
+const vehicleIcons: Record<VehicleType, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  'carro-bajo': 'car-sports',
+  jeepeta: 'car-estate',
+  camion: 'truck',
+  motor: 'motorbike'
+};
 
 export const ReportScreen = ({ navigation }: Props) => {
   const [waterLevel, setWaterLevel] = useState<WaterLevel>('yellow');
   const [selectedVehicles, setSelectedVehicles] = useState<VehicleType[]>(['jeepeta']);
+  const [comment, setComment] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const summary = useMemo(
-    () => selectedVehicles.map((item) => vehicleLabels[item]).join(', '),
-    [selectedVehicles]
-  );
+  const summary = useMemo(() => selectedVehicles.map((item) => vehicleLabels[item]).join(', '), [selectedVehicles]);
 
   const toggleVehicle = (vehicle: VehicleType) => {
     setSelectedVehicles((prev) =>
@@ -45,7 +51,8 @@ export const ReportScreen = ({ navigation }: Props) => {
         latitude: location.coords.latitude,
         longitude: location.coords.longitude,
         waterLevel,
-        recommendedVehicles: selectedVehicles
+        recommendedVehicles: selectedVehicles,
+        comment: comment.trim() || undefined
       });
       Alert.alert('Reporte enviado', 'Gracias por ayudar a la comunidad vial.');
       navigation.goBack();
@@ -58,20 +65,25 @@ export const ReportScreen = ({ navigation }: Props) => {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Nivel de agua</Text>
-      <View style={styles.row}>
+      <Text style={styles.title}>Reporta inundación o charco</Text>
+      <Text style={styles.subtitle}>Comparte el nivel de agua para ayudar a otros conductores.</Text>
+
+      <Text style={styles.sectionTitle}>Nivel del agua</Text>
+      <View style={styles.levelRow}>
         {levels.map((level) => (
           <Pressable
             key={level.key}
             onPress={() => setWaterLevel(level.key)}
-            style={[styles.pill, waterLevel === level.key && styles.selectedPill]}
+            style={[styles.levelCard, waterLevel === level.key && styles.selectedLevel]}
           >
-            <Text style={styles.pillText}>{level.label}</Text>
+            <MaterialCommunityIcons name={level.icon} size={24} color="#e2e8f0" />
+            <Text style={styles.levelLabel}>{level.label}</Text>
+            <Text style={styles.levelHelper}>{level.helper}</Text>
           </Pressable>
         ))}
       </View>
 
-      <Text style={styles.title}>Vehículos recomendados</Text>
+      <Text style={styles.sectionTitle}>Vehículos recomendados</Text>
       <View style={styles.grid}>
         {(Object.keys(vehicleLabels) as VehicleType[]).map((vehicle) => (
           <Pressable
@@ -79,35 +91,87 @@ export const ReportScreen = ({ navigation }: Props) => {
             onPress={() => toggleVehicle(vehicle)}
             style={[styles.vehicleItem, selectedVehicles.includes(vehicle) && styles.selectedVehicle]}
           >
+            <MaterialCommunityIcons name={vehicleIcons[vehicle]} size={22} color="#dbeafe" />
             <Text style={styles.vehicleText}>{vehicleLabels[vehicle]}</Text>
           </Pressable>
         ))}
       </View>
 
+      <TextInput
+        value={comment}
+        onChangeText={setComment}
+        style={styles.input}
+        placeholder="Comentario opcional (ej. carril izquierdo está libre)"
+        placeholderTextColor="#64748b"
+      />
+
       <Text style={styles.summary}>Recomendado para: {summary}</Text>
       <Text style={styles.note}>Foto opcional: lista para integrar con Firebase Storage en la siguiente iteración.</Text>
 
-      <Pressable style={[styles.submit, isLoading && styles.disabled]} disabled={isLoading} onPress={submit}>
-        <Text style={styles.submitText}>{isLoading ? 'Enviando...' : 'Publicar reporte'}</Text>
-      </Pressable>
+      <View style={styles.footerRow}>
+        <Pressable style={styles.cancel} onPress={() => navigation.goBack()}>
+          <Text style={styles.cancelText}>Cancelar</Text>
+        </Pressable>
+        <Pressable style={[styles.submit, isLoading && styles.disabled]} disabled={isLoading} onPress={submit}>
+          <Text style={styles.submitText}>{isLoading ? 'Enviando...' : 'Enviar reporte'}</Text>
+        </Pressable>
+      </View>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0f172a', padding: 16 },
-  title: { color: '#f8fafc', fontWeight: '700', fontSize: 18, marginBottom: 12 },
-  row: { flexDirection: 'row', gap: 8, marginBottom: 20 },
-  pill: { backgroundColor: '#1e293b', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  selectedPill: { borderWidth: 1, borderColor: '#38bdf8' },
-  pillText: { color: '#f1f5f9', fontWeight: '600' },
+  container: { flex: 1, backgroundColor: '#0b1228', padding: 16 },
+  title: { color: '#f8fafc', fontWeight: '800', fontSize: 28 },
+  subtitle: { color: '#94a3b8', marginTop: 4, marginBottom: 16 },
+  sectionTitle: { color: '#e2e8f0', fontWeight: '700', fontSize: 16, marginBottom: 10 },
+  levelRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  levelCard: {
+    flex: 1,
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#334155'
+  },
+  selectedLevel: { borderColor: '#60a5fa', backgroundColor: '#1d4ed833' },
+  levelLabel: { color: '#f8fafc', fontWeight: '700', marginTop: 8 },
+  levelHelper: { color: '#cbd5e1', fontSize: 12, marginTop: 4 },
   grid: { gap: 10, marginBottom: 16 },
-  vehicleItem: { backgroundColor: '#1e293b', padding: 12, borderRadius: 10 },
-  selectedVehicle: { borderColor: '#22c55e', borderWidth: 1 },
-  vehicleText: { color: '#e2e8f0' },
-  summary: { color: '#cbd5e1', marginBottom: 12 },
+  vehicleItem: {
+    backgroundColor: '#1e293b',
+    padding: 12,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: '#334155'
+  },
+  selectedVehicle: { borderColor: '#22c55e', backgroundColor: '#14532d66' },
+  vehicleText: { color: '#e2e8f0', fontWeight: '600' },
+  input: {
+    backgroundColor: '#111827',
+    borderColor: '#334155',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    color: '#f8fafc',
+    marginBottom: 12
+  },
+  summary: { color: '#cbd5e1', marginBottom: 8 },
   note: { color: '#94a3b8', marginBottom: 16, fontStyle: 'italic' },
-  submit: { backgroundColor: '#2563eb', paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
+  footerRow: { flexDirection: 'row', gap: 10 },
+  cancel: {
+    flex: 1,
+    backgroundColor: '#1e293b',
+    paddingVertical: 14,
+    borderRadius: 10,
+    alignItems: 'center'
+  },
+  cancelText: { color: '#e2e8f0', fontWeight: '700' },
+  submit: { flex: 1.4, backgroundColor: '#2563eb', paddingVertical: 14, borderRadius: 10, alignItems: 'center' },
   disabled: { opacity: 0.6 },
   submitText: { color: '#f8fafc', fontWeight: '700' }
 });
